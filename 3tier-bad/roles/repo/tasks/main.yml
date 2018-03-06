@@ -1,0 +1,8 @@
+---
+  - name: enable repos
+    template:
+      src: "{{repofile}}"
+      dest: "/etc/yum.repos.d/{{repofile}}"
+      mode: 0644
+
+

@@ -18,16 +18,11 @@
     name: "{{ item }}"
     state: absent
   with_items:
-    - httpie
+    - http
     - python-pip
     - haproxy
     - tomcat
     - postgresql-server
-
-#- name: Copy placeholder index.html
-# template:
-#    src: /dev/null
-#    dest: /tmp/index.html
 
 - name: Remove index.html
   file:

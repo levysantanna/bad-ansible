@@ -1,0 +1,24 @@
+---
+- hosts: all
+  become: true
+  roles:
+    - { role: 'repo'}
+
+- name: Apps roles
+  become: true
+  hosts: frontends
+  roles:
+    - { role: 'haproxy'}
+
+- name: Apps roles
+  become: true
+  hosts: appdbs
+  roles:
+    - { role: 'postgres'}
+
+- name: Apps roles
+  become: true
+  hosts: apps
+  roles:
+    - { role: 'tomcat'}
+    - { role: 'apache'}

@@ -1,140 +1,102 @@
 ---
-# Bad ansible! This playbook is an example of poor/bad practices!
-# Bad practices may include:
-#
-#   Poor formatting and structure
-#   Poor use of YAML - but good enough to parse
-#   Inconsistent style
-#   Incorrect use of modules
-#   Poor module choice
-#   Unclear names
-#   Hard coding / poor use of variables
-#   Roles - what are roles?
-#   Bare variables
-#   No use of handlers
-
 - name: configuration
   hosts: all
-  gather_facts: false # remove later! speeds up testing
   become: true
+  vars:
+    repofile: open_three-tier-app.repo
 
   tasks:
   - name: enable repos
     template:
-      src: ./open_three-tier-app.repo
-      dest: /etc/yum.repos.d/open_three-tier-app.repo
+      src: "{{repofile}}"
+      dest: "/etc/yum.repos.d/{{repofile}}"
       mode: 0644
 
 - name: deploy haproxy
   hosts: frontends
-  gather_facts: false # remove later! speeds up testing
   become: true
+  vars:
+    packages: 
+      - httpd
+      - haproxy
 
   tasks:
-  - name: http
+  - name: Install packages
     package:
-      name: httpie
+      name: "{{ item }}"
       state: latest
-  - name: install HAProxy
-    yum:
-      name=haproxy state=latest
-  - name: enable HAProxy
-    service:
-      name: haproxy
-      state: started
+    with_items: "{{ packages }}"
+
   - name: configure haproxy
     template:
-      src: ./haproxy.cfg.j2
+      src: haproxy.cfg.j2
       dest: /etc/haproxy/haproxy.cfg
+    notify: restart HAproxy
+
+  handlers:
   - name: restart HAproxy
     service:
       name: haproxy
       state: restarted
-
+      enabled: true
 
 - name: deploy tomcat
   hosts: apps
   gather_facts: false
   become: true
+  vars:
+    directories: 
+      - "/usr/share/tomcat/webapps/ROOT"
+      - "/usr/share/tomcat/webapps/ansible"
 
   tasks:
   - name: install tomcat
     package:
       name: tomcat
       state: latest
-  - name: enable tomcat at boot
-    service:
-      name: tomcat
-      enabled: yes
 
-  - name: create ansible tomcat directory
+  - name: create ansible tomcat directories
     file:
-      path: /usr/share/tomcat/webapps/ROOT
+      path: "{{ item }}"
       state: directory
+    with_items: "{{ directories }}"
 
-  - name: copy static index.html to tomcat webapps/ansible/index.html
+  - name: apply template to tomcat webapps/ROOT
     template:
       src: index.html.j2
-      dest: /usr/share/tomcat/webapps/ROOT/index.html
+      dest: "{{ item }}/index.html"
       mode: 0644
+    with_items: "{{ directories }}"
+    notify: start tomcat
 
+  handlers:
   - name: start tomcat
     service:
       name: tomcat
       state: started
-
-- name: index.html on app 1
-  hosts: app1
-  gather_facts: false
-  become: true
-
-  tasks:
-  - name: copy static index.html to tomcat webapps/ansible/index.html
-    template:
-      src: index.html.app1
-      dest: /usr/share/tomcat/webapps/ansible/index.html
-
-- name: index.html on app 1
-  hosts: app2
-  gather_facts: false
-  become: true
-
-  tasks:
-  - name: copy static index.html to tomcat webapps/ansible/index.html
-    template:
-      src: index.html.app2
-      dest: /usr/share/tomcat/webapps/ansible/index.html
+      enabled: true
 
 - name: deploy postgres
-  hosts: apps
   gather_facts: false
   become: true
   hosts: appdbs
   tasks:
-  - name: install progress
-    command: "yum install -y postgresql-server"
+  - name: install postgres
+    yum:
+      name: postgresql-server
+      state: latest
 
-  #- name: install postgres
-  #  yum:
-  #    name: postgresql-server
-  #    state: latest
-  - name: enable apache at boot
-    service:
-      name: postgresql
-      enabled: yes
-  - name: tell user to finish setting up postgres
-    debug:
-      msg: "Either uncomment the postgres setup or manually login and initialize"
-
- # only run the next 2 tasks once!
-#  - name: initilize postgres
-#    command: postgresql-setup initdb
-#  - name: initilize postgres some more
-#    command: chkconfig postgresql on
+  - name: initilize postgres only if it is not done
+    command: postgresql-setup initdb
+    args:
+      creates: "/var/lib/pgsql/initdb.log"
+    notify: start postgres
+  handlers:
   - name: start postgres
     service:
-      name: postgresql.service
+      name: postgresql
       state: started
+      enabled: true
 
 - name: deploy apache
   hosts: apps
@@ -146,11 +108,11 @@
     yum:
       name: httpd
       state: latest
-  - name: enable apache at boot
-    service:
-      name: httpd
-      enabled: yes
+    notify: start apache
+
+  handlers:
   - name: start apache
     service:
       name: httpd
       state: started
+      enabled: true
